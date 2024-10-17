@@ -4,7 +4,7 @@ import pandas as pd
 class CSVLoader:
     """
     A class to load and preprocess CSV files.
-    Provides functionality to load a CSV file and ensure it's preprocessed.
+    Provides functionality to load a CSV file, and ensure it's preprocessed.
     """
 
     @staticmethod
