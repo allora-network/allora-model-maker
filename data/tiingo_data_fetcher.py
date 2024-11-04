@@ -1,8 +1,10 @@
 import os
+import time
 
 import pandas as pd
 import requests
 from dotenv import load_dotenv
+from tqdm import tqdm
 
 # Load the .env.local file if it exists, otherwise load .env
 if os.path.exists(".env.local"):
@@ -76,56 +78,75 @@ class DataFetcher:
         return df
 
     def fetch_tiingo_crypto_data(self, symbol, start_date, end_date, frequency="5min"):
-        """Fetch historical cryptocurrency data from Tiingo."""
+        """Fetch historical cryptocurrency data from Tiingo in 3-day batches."""
 
         filename = self._generate_filename(symbol, start_date, end_date, frequency)
 
         # Check if the CSV file already exists
         if os.path.exists(filename):
-            print(f"Loading stock data from {filename}...")
+            print(f"Loading crypto data from {filename}...")
             return pd.read_csv(filename)
 
-        # Define the URL, headers, and parameters for the request
-        url = f"{BASE_APIURL}/tiingo/crypto/prices"
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Token {TIINGO_API_KEY}",
-        }
-        params = {
-            "tickers": symbol,
-            "startDate": start_date,
-            "endDate": end_date,
-            # The minimum value is "1min". Units in minutes (min), hours (hour), and days (day) are accepted.
-            # Format is # + (min/hour/day); e.g. "15min", "4hour" or "1day".
-            # If no value is provided, defaults to 5min.
-            "resampleFreq": frequency,
-        }
+        # Convert dates to pandas datetime for easier manipulation
+        start = pd.to_datetime(start_date)
+        end = pd.to_datetime(end_date)
 
-        # Send request to Tiingo API
-        try:
-            response = requests.get(url, headers=headers, params=params, timeout=10)
-            response.raise_for_status()  # Raise an exception for HTTP errors
-        except requests.exceptions.RequestException as e:
-            print(f"Request error: {e}")
-            return pd.DataFrame()
+        # Calculate total number of 3-day periods
+        total_days = (end - start).days
+        total_batches = (total_days + 2) // 3  # Round up to nearest batch
 
-        # Parse JSON response
-        try:
-            data = response.json()
-            if not data or "priceData" not in data[0]:
-                print(f"No crypto data found for {symbol}")
-                return pd.DataFrame()
-        except (ValueError, KeyError) as e:
-            print(f"Error parsing response data: {e}")
-            return pd.DataFrame()
+        # Initialize empty DataFrame for all results
+        all_data = pd.DataFrame()
 
-        df = self._normalize_tiingo_data(data[0]["priceData"], symbol)
+        # Process in 3-day chunks with progress bar
+        with tqdm(total=total_batches, desc=f"Fetching {symbol} data") as pbar:
+            current_start = start
+            while current_start < end:
+                current_end = min(current_start + pd.Timedelta(days=3), end)
 
-        # Save the fetched data to CSV
-        print(f"Saving crypto data to {filename}...")
-        df.to_csv(filename, index=False)
+                # Define the URL, headers, and parameters for the request
+                url = f"{BASE_APIURL}/tiingo/crypto/prices"
+                headers = {
+                    "Content-Type": "application/json",
+                    "Authorization": f"Token {TIINGO_API_KEY}",
+                }
+                params = {
+                    "tickers": symbol,
+                    "startDate": current_start.strftime("%Y-%m-%d"),
+                    "endDate": current_end.strftime("%Y-%m-%d"),
+                    "resampleFreq": frequency,
+                }
 
-        return df
+                # Send request to Tiingo API
+                try:
+                    response = requests.get(url, headers=headers, params=params, timeout=10)
+                    response.raise_for_status()
+
+                    data = response.json()
+                    if data and "priceData" in data[0]:
+                        batch_df = self._normalize_tiingo_data(data[0]["priceData"], symbol)
+                        all_data = pd.concat([all_data, batch_df], ignore_index=True)
+
+                    # Add a small delay to avoid hitting rate limits
+                    time.sleep(0.5)
+
+                except requests.exceptions.RequestException as e:
+                    print(f"\nRequest error for period {current_start.date()} to {current_end.date()}: {e}")
+                except (ValueError, KeyError) as e:
+                    print(f"\nError parsing response data: {e}")
+
+                current_start = current_end
+                pbar.update(1)
+
+        # Remove any duplicate rows that might occur at batch boundaries
+        all_data = all_data.drop_duplicates()
+
+        if not all_data.empty:
+            # Save the fetched data to CSV
+            print(f"Saving crypto data to {filename}...")
+            all_data.to_csv(filename, index=False)
+
+        return all_data
 
     def _normalize_tiingo_data(self, data, asset_name):
         """Normalize Tiingo stock data to match the required schema."""

@@ -2,6 +2,7 @@
 # conda activate modelmaker
 # pip install setuptools==72.1.0 Cython==3.0.11 numpy==1.24.3
 # pip install -r requirements.txt
+import os
 import sys
 from datetime import datetime, timedelta
 
@@ -81,6 +82,32 @@ def select_data(fetcher, default_selection=None, file_path=None):
 
     if selection == "3":
         print("You selected to load data from a CSV file.")
+
+        # Add numbered directory listing functionality
+        sets_dir = os.path.join(os.path.dirname(__file__), "data", "sets")
+        if os.path.exists(sets_dir):
+            print("\nAvailable files in data/sets:")
+            csv_files = [f for f in os.listdir(sets_dir) if f.endswith('.csv')]
+
+            if not csv_files:
+                print("No CSV files found in data/sets directory.")
+            else:
+                for idx, file in enumerate(csv_files, 1):
+                    print(f"{idx}. {file}")
+                print()
+
+                if file_path is None:
+                    file_selection = input("Enter the number of the file or provide a custom path: ").strip()
+                    try:
+                        file_idx = int(file_selection)
+                        if 1 <= file_idx <= len(csv_files):
+                            file_path = os.path.join(sets_dir, csv_files[file_idx - 1])
+                        else:
+                            print_colored("Invalid file number. Using provided path as-is.", "warning")
+                    except ValueError:
+                        # If input is not a number, treat it as a custom path
+                        file_path = file_selection
+
         if file_path is None:
             file_path = input("Enter the CSV file path: ").strip()
         return CSVLoader.load_csv(file_path)
