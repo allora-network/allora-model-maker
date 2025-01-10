@@ -54,7 +54,7 @@ Allora Model Maker is a comprehensive machine learning framework designed for ti
    cd allora-model-maker
     ```
 
-   #### Dont have conda?
+   #### Don't have conda?
       On Mac simply use brew
       ```bash
       brew install miniconda
@@ -279,7 +279,7 @@ Replace arima with the name of the model you’d like to package (e.g., lstm, ar
 This will:
 
  - Copy the model’s files and dependencies into the packaged_models/package folder.
- - Run test's for inference and training to validate funtionality in a worker
+ - Run test's for inference and training to validate functionality in a worker
  - Generate a configuration file, config.py, that contains the active model information.
 
 #### Next Steps
