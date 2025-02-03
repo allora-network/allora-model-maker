@@ -12,6 +12,7 @@ models = [
     "prophet",
     "arima",
     "lstm",
+    "rfregressor_volatility"
 ]
 
 # Define the metrics to be used
